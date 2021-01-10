@@ -6,6 +6,7 @@ import {
   InputType,
   Mutation,
   ObjectType,
+  Query,
   Resolver,
 } from "type-graphql";
 import { MyContext } from "./../types";
@@ -38,10 +39,20 @@ class UserResponse {
 
 @Resolver()
 export class UserResolver {
+  @Query(() => User, { nullable: true })
+  async me(@Ctx() { em, req }: MyContext) {
+    const id = req.session.userId;
+    // You are not logged in
+    if (!id) return null;
+    // You are logged in
+    const user = await em.findOne(User, { id });
+    return user;
+  }
+
   @Mutation(() => UserResponse)
   async register(
     @Arg("options") options: UsernamePasswordInput,
-    @Ctx() { em }: MyContext
+    @Ctx() { em, req }: MyContext
   ): Promise<UserResponse> {
     // Check username length
     if (options.username.length <= 2) {
@@ -63,6 +74,10 @@ export class UserResolver {
         password: hashedPassword,
       });
       await em.persistAndFlush(user);
+
+      // Log in the user after registration
+      req.session.userId = user.id;
+
       return { user };
     } catch (error) {
       // duplicate username error
