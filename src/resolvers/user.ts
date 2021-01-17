@@ -11,8 +11,10 @@ import {
 } from "type-graphql";
 import { MyContext } from "./../types";
 import { User } from "./../entities/User";
-import { COOKIE_NAME } from "./../constants";
+import { COOKIE_NAME, FORGET_PASSWORD_PREFIX } from "./../constants";
 import { UsernamePasswordInput } from "./UsernamePasswordInput";
+import { sendEmail } from "../utils/sendEmail";
+import { v4 } from "uuid";
 
 @ObjectType()
 class FieldError {
@@ -136,8 +138,69 @@ export class UserResolver {
   }
 
   @Mutation(() => Boolean)
-  async forgotPassword(@Arg("email") email: string, @Ctx() { em }: MyContext) {
-    await em.findOne(User, { email });
+  async forgotPassword(
+    @Arg("email") email: string,
+    @Ctx() { em, redis }: MyContext
+  ) {
+    const user = await em.findOne(User, { email });
+    if (!user) {
+      // email is not in the database
+      return true; // so client doesn't know if email is valid or not
+    }
+
+    const token = v4();
+
+    await redis.set(
+      `${FORGET_PASSWORD_PREFIX}${token}`,
+      user.id,
+      "ex",
+      1000 * 60 * 60 * 24 * 3
+    ); // 3 days
+
+    sendEmail(
+      email,
+      `<a href="http://localhost:3000/change-password/${token}">reset password</a>`
+    );
+
     return true;
+  }
+
+  @Mutation(() => UserResponse)
+  async changePassword(
+    @Arg("token") token: string,
+    @Arg("newPassword") newPassword: string,
+    @Ctx() { em, redis, req }: MyContext
+  ): Promise<UserResponse> {
+    // Check password length
+    if (newPassword.length <= 3) {
+      return {
+        errors: [
+          { field: "newPassword", message: "password is not long enough" },
+        ],
+      };
+    }
+
+    const userId = await redis.get(`${FORGET_PASSWORD_PREFIX}${token}`);
+    if (!userId)
+      return { errors: [{ field: "token", message: "token expired" }] };
+
+    const user = await em.findOne(User, { id: parseInt(userId) });
+
+    if (!user) {
+      return { errors: [{ field: "token", message: "user no longer exists" }] };
+    }
+
+    const hashedNewPassword = await argon2.hash(newPassword);
+
+    user.password = hashedNewPassword;
+    em.persistAndFlush(user);
+
+    // log in user after change password
+    req.session.userId = user.id;
+
+    // remove token
+    await redis.del(`${FORGET_PASSWORD_PREFIX}${token}`);
+
+    return { user };
   }
 }
