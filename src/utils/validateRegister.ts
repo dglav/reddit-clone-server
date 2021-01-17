@@ -15,7 +15,7 @@ export const validateRegister = (options: UsernamePasswordInput) => {
     return [{ field: "email", message: "email is invalid" }];
   }
   // Check password length
-  if (options.password.length <= 3) {
+  if (options.password.length < 3) {
     return [{ field: "password", message: "password is not long enough" }];
   }
 
