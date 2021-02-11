@@ -139,7 +139,11 @@ export class UserResolver {
     @Arg("email") email: string,
     @Ctx() { redis }: MyContext
   ) {
-    const user = await User.findOne({ where: email });
+    console.log({ email });
+    const user = await User.findOne({ where: { email: email } });
+
+    console.log({ user });
+
     if (!user) {
       // email is not in the database
       return true; // so client doesn't know if email is valid or not
