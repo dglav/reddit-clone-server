@@ -30,15 +30,17 @@ export class PostResolver {
     @Arg("cursor", () => String, { nullable: true }) cursor: string | null
   ): Promise<Post[]> {
     const realLimit = Math.min(50, limit);
-    const qb = getConnection()
+    const queryBuilder = getConnection()
       .getRepository(Post)
-      .createQueryBuilder("p")
+      .createQueryBuilder("post")
       .orderBy('"createdAt"', "DESC")
       .take(realLimit);
     if (cursor) {
-      qb.where('"createdAt" < :cursor', { cursor: new Date(parseInt(cursor)) });
+      queryBuilder.where('"createdAt" < :cursor', {
+        cursor: new Date(parseInt(cursor)),
+      });
     }
-    return qb.getMany();
+    return queryBuilder.getMany();
   }
 
   @Query(() => Post, { nullable: true })
