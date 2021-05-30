@@ -30,7 +30,7 @@ export class PostResolver {
   @FieldResolver(() => String)
   textSnippet(@Root() root: Post) {
     return `${root.text.slice(0, 100)}${
-      root.text.length > TEXT_SNIPPET_LENGTH && "..."
+      root.text.length > TEXT_SNIPPET_LENGTH ? "..." : ""
     }`;
   }
 
