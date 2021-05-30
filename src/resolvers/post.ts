@@ -3,16 +3,19 @@ import {
   Arg,
   Ctx,
   Field,
+  FieldResolver,
   InputType,
   Int,
   Mutation,
   Query,
   Resolver,
+  Root,
   UseMiddleware,
 } from "type-graphql";
 import { Post } from "./../entities/Post";
 import { isAuth } from "../middleware/isAuth";
 import { getConnection } from "typeorm";
+import { TEXT_SNIPPET_LENGTH } from "./constants";
 
 @InputType()
 class PostInput {
@@ -22,8 +25,15 @@ class PostInput {
   text: string;
 }
 
-@Resolver()
+@Resolver(Post)
 export class PostResolver {
+  @FieldResolver(() => String)
+  textSnippet(@Root() root: Post) {
+    return `${root.text.slice(0, 100)}${
+      root.text.length > TEXT_SNIPPET_LENGTH && "..."
+    }`;
+  }
+
   @Query(() => [Post])
   posts(
     @Arg("limit", () => Int) limit: number,
