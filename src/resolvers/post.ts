@@ -43,6 +43,33 @@ export class PostResolver {
     }`;
   }
 
+  @Mutation(() => Boolean)
+  @UseMiddleware([isAuth])
+  async vote(
+    @Arg("postId", () => Int) postId: number,
+    @Arg("value", () => Int) value: number,
+    @Ctx() { req }: MyContext
+  ) {
+    const isUpdoot = value !== -1;
+    const realValue = isUpdoot ? 1 : -1;
+    const { userId } = req.session;
+    await getConnection().query(
+      `
+      START TRANSACTION;
+
+      INSERT INTO updoot ("userId", "postId", value)
+      VALUES (${userId}, ${postId}, ${realValue});
+
+      UPDATE post p
+      SET points = points + ${realValue}
+      WHERE p.id = ${postId};
+
+      COMMIT;
+    `
+    );
+    return true;
+  }
+
   @Query(() => PaginatedPosts)
   async posts(
     @Arg("limit", () => Int) limit: number,
