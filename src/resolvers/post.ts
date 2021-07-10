@@ -14,6 +14,7 @@ import {
   UseMiddleware,
 } from "type-graphql";
 import { Post } from "./../entities/Post";
+import { Updoot } from "../entities/Updoot";
 import { isAuth } from "../middleware/isAuth";
 import { getConnection } from "typeorm";
 import { TEXT_SNIPPET_LENGTH } from "./constants";
@@ -53,20 +54,50 @@ export class PostResolver {
     const isUpdoot = value !== -1;
     const realValue = isUpdoot ? 1 : -1;
     const { userId } = req.session;
-    await getConnection().query(
-      `
-      START TRANSACTION;
+    const updoot = await Updoot.findOne({ where: { postId, userId } });
 
-      INSERT INTO updoot ("userId", "postId", value)
-      VALUES (${userId}, ${postId}, ${realValue});
+    if (updoot && updoot.value !== realValue) {
+      // the user has voted on the post before
+      // and they are changing their vote
+      await getConnection().transaction(async (transactionManager) => {
+        await transactionManager.query(
+          `
+        UPDATE updoot 
+        SET value = $1
+        WHERE "postId" = $2 AND "userId" = $3;
+        `,
+          [realValue, postId, userId]
+        );
+        await transactionManager.query(
+          `
+        UPDATE post p
+        SET points = points + $2
+        WHERE p.id = $1;
+        `,
+          [postId, realValue * 2]
+        );
+      });
+    } else if (!updoot) {
+      // the user has never voted before
+      await getConnection().transaction(async (transactionManager) => {
+        await transactionManager.query(
+          `
+        INSERT INTO updoot ("userId", "postId", value)
+        VALUES ($1, $2, $3);
+        `,
+          [userId, postId, realValue]
+        );
 
-      UPDATE post p
-      SET points = points + ${realValue}
-      WHERE p.id = ${postId};
-
-      COMMIT;
-    `
-    );
+        await transactionManager.query(
+          `
+        UPDATE post p
+        SET points = points + $2
+        WHERE p.id = $1;
+        `,
+          [postId, realValue]
+        );
+      });
+    }
     return true;
   }
 
