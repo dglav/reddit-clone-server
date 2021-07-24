@@ -15,7 +15,8 @@ import { User } from "./entities/User";
 import { Post } from "./entities/Post";
 import { Updoot } from "./entities/Updoot";
 import path from "path";
-import { createUserLoader } from "./utils/CreateUserLoader";
+import { createUserLoader } from "./utils/createUserLoader";
+import { createUpdootLoader } from "./utils/createUpdootLoader";
 
 const main = async () => {
   await createConnection({
@@ -66,6 +67,7 @@ const main = async () => {
       req,
       res,
       userLoader: createUserLoader(),
+      updootLoader: createUpdootLoader(),
     }),
   });
 

@@ -1,3 +1,4 @@
+import { User } from "./../entities/User";
 import { MyContext } from "./../types";
 import {
   Arg,
@@ -44,9 +45,24 @@ export class PostResolver {
     }`;
   }
 
-  @FieldResolver(() => String)
+  @FieldResolver(() => User)
   creator(@Root() post: Post, @Ctx() { userLoader }: MyContext) {
     return userLoader.load(post.creatorId);
+  }
+
+  @FieldResolver(() => User)
+  async voteStatus(
+    @Root() post: Post,
+    @Ctx() { req, updootLoader }: MyContext
+  ) {
+    if (!req.session.userId) {
+      return null;
+    }
+    const updoot = await updootLoader.load({
+      postId: post.id,
+      userId: post.creatorId,
+    });
+    return updoot ? updoot.value : null;
   }
 
   @Mutation(() => Boolean)
@@ -109,34 +125,22 @@ export class PostResolver {
   @Query(() => PaginatedPosts)
   async posts(
     @Arg("limit", () => Int) limit: number,
-    @Arg("cursor", () => String, { nullable: true }) cursor: string | null,
-    @Ctx() { req }: MyContext
+    @Arg("cursor", () => String, { nullable: true }) cursor: string | null
   ): Promise<PaginatedPosts> {
     const realLimit = Math.min(50, limit);
     const realLimitPlusOne = Math.min(50, limit) + 1;
 
     const replacements: any[] = [realLimitPlusOne];
 
-    if (req.session.userId) {
-      replacements.push(req.session.userId);
-    }
-
-    let cursorIdx = 3;
     if (cursor) {
       replacements.push(new Date(parseInt(cursor)));
-      cursorIdx = replacements.length;
     }
 
     const posts = await getConnection().query(
       `
-      SELECT p.*, 
-      ${
-        req.session.userId
-          ? '(SELECT value from updoot WHERE "userId" = $2 AND "postId" = p.id) "voteStatus"'
-          : 'null as "voteStatus"'
-      }
+      SELECT p.*
       FROM post p
-      ${cursor ? `WHERE p."createdAt" < $${cursorIdx}` : ""}
+      ${cursor ? `WHERE p."createdAt" < $2` : ""}
       ORDER BY p."createdAt" DESC
       LIMIT $1
     `,
