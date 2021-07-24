@@ -44,6 +44,11 @@ export class PostResolver {
     }`;
   }
 
+  @FieldResolver(() => String)
+  creator(@Root() post: Post, @Ctx() { userLoader }: MyContext) {
+    return userLoader.load(post.creatorId);
+  }
+
   @Mutation(() => Boolean)
   @UseMiddleware([isAuth])
   async vote(
@@ -125,20 +130,12 @@ export class PostResolver {
     const posts = await getConnection().query(
       `
       SELECT p.*, 
-      json_build_object(
-        'id', u.id,
-        'username', u.username,
-        'email', u.email,
-        'createdAt', u."createdAt",
-        'updatedAt', u."updatedAt"
-        ) creator,
       ${
         req.session.userId
           ? '(SELECT value from updoot WHERE "userId" = $2 AND "postId" = p.id) "voteStatus"'
           : 'null as "voteStatus"'
       }
       FROM post p
-      INNER JOIN public.user u on u.id = p."creatorId"
       ${cursor ? `WHERE p."createdAt" < $${cursorIdx}` : ""}
       ORDER BY p."createdAt" DESC
       LIMIT $1
@@ -154,7 +151,7 @@ export class PostResolver {
 
   @Query(() => Post, { nullable: true })
   post(@Arg("id", () => Int) id: number): Promise<Post | undefined> {
-    return Post.findOne(id, { relations: ["creator"] });
+    return Post.findOne(id);
   }
 
   @Mutation(() => Post)
