@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import "dotenv-safe/config";
 import express from "express";
 import { createConnection } from "typeorm";
 import { ApolloServer } from "apollo-server-express";
@@ -19,17 +20,15 @@ import { createUserLoader } from "./utils/createUserLoader";
 import { createUpdootLoader } from "./utils/createUpdootLoader";
 
 const main = async () => {
-  await createConnection({
+  const conn = await createConnection({
     type: "postgres",
-    database: "lireddit2",
-    username: "postgres",
-    password: "postgress",
+    url: process.env.DATABASE_URL,
     logging: true,
-    synchronize: true,
+    // synchronize: true,
     migrations: [path.join(__dirname, "./migrations/*")],
     entities: [Post, User, Updoot],
   });
-  // await conn.runMigrations();
+  await conn.runMigrations();
   // await Post.delete({});
 
   const app = express();
@@ -38,8 +37,8 @@ const main = async () => {
   // Needs to come before ApolloServer because that will use information from Redis
   // (the order of execution matters)
   const RedisStore = connectRedis(session);
-  const redis = new Redis();
-
+  const redis = new Redis(process.env.REDIS_URL);
+  app.set("proxy", 1);
   app.use(
     session({
       name: COOKIE_NAME,
@@ -49,9 +48,10 @@ const main = async () => {
         httpOnly: true,
         sameSite: "lax", // csrf
         secure: __prod__, // only works in https
+        // domain: __prod__ ? ".codeponder.com" : undefined, // to fix problem with cookies not forwarding
       },
       saveUninitialized: false,
-      secret: "ailfbleiwbfliaebf",
+      secret: process.env.SESSION_SECRET,
       resave: false,
     })
   );
@@ -73,11 +73,11 @@ const main = async () => {
 
   apolloServer.applyMiddleware({
     app,
-    cors: { origin: "http://localhost:3000", credentials: true },
+    cors: { origin: process.env.CORS_ORIGIN, credentials: true },
   });
 
-  app.listen(4000, () => {
-    console.log("Server started on localhost:4000");
+  app.listen(process.env.PORT, () => {
+    console.log(`Server started on localhost:${process.env.PORT}`);
   });
 };
 
